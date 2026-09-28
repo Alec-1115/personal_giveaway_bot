@@ -3,15 +3,25 @@ import discord
 
 def create_giveaway_embed(
     name: str,
-    reward: discord.Role,
+    reward_name: str,
+    reward: discord.Role | None,
+    description: str,
     winners: int,
     end_timestamp: int
 ) -> discord.Embed:
 
+    # Role giveaways display the actual role.
+    # Redeemable giveaways display the reward name.
+    if reward is not None:
+        prize_text = reward.mention
+    else:
+        prize_text = reward_name
+
     embed = discord.Embed(
         title=f"🎉 {name}",
         description=(
-            f"**Prize:** {reward.mention}\n\n"
+            f"**Prize:** {prize_text}\n\n"
+            f"{description}\n\n"
             "Click the button below to enter!"
         ),
         colour=discord.Colour.blurple()
@@ -35,7 +45,9 @@ def create_giveaway_embed(
         inline=True
     )
 
-    embed.set_footer(text="Giveaway")
+    embed.set_footer(
+        text="Giveaway"
+    )
 
     return embed
 
@@ -63,36 +75,35 @@ def update_entry_count(
 
 def close_giveaway_embed(
     embed: discord.Embed,
-    winners: list[discord.User]
+    winners: list[discord.User | discord.Member]
 ) -> discord.Embed:
 
-    # Change the giveaway description.
-    embed.description = "This giveaway has now concluded."
+    # Change description
+    embed.description = (
+        "This giveaway has now concluded."
+    )
 
-    # Get the current entry count before removing the fields.
+    # Preserve final entry count
     entries_value = "0"
 
     for field in embed.fields:
 
         if field.name == "Entries":
+
             entries_value = field.value
             break
 
-    # Remove the open-giveaway fields.
-    # This removes:
-    # - Winners
-    # - Entries
-    # - Ends
+    # Remove existing fields
     embed.clear_fields()
 
-    # Add back ONLY the entry count.
+    # Final entry count
     embed.add_field(
         name="Entries",
         value=entries_value,
         inline=True
     )
 
-    # Create the winner list.
+    # Winners
     if winners:
 
         winner_text = "\n".join(
@@ -105,16 +116,16 @@ def close_giveaway_embed(
 
     else:
 
-        winner_text = "No winners — nobody entered."
+        winner_text = (
+            "No winners — nobody entered."
+        )
 
-    # Add winners underneath the entry count.
     embed.add_field(
         name="🏆 Winners",
         value=winner_text,
         inline=False
     )
 
-    # Update the footer.
     embed.set_footer(
         text="Giveaway Closed"
     )
@@ -135,6 +146,8 @@ def create_closed_view() -> discord.ui.View:
         disabled=True
     )
 
-    view.add_item(button)
+    view.add_item(
+        button
+    )
 
     return view

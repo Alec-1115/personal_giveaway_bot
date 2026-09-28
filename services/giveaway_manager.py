@@ -2,7 +2,10 @@ import asyncio
 
 import discord
 
-from services.giveaway_dm import send_winner_dm
+from services.giveaway_dm import (
+    send_redeemable_dm,
+    send_winner_dm
+)
 from services.giveaway_messages import (
     close_giveaway_embed,
     create_closed_view
@@ -18,15 +21,25 @@ class GiveawayManager:
         bot: discord.Client,
         message: discord.Message,
         giveaway_name: str,
-        reward: discord.Role,
+        reward_name: str,
+        reward_type: str,
+        reward: discord.Role | None,
+        redeemable_links: list[str],
         winners: int,
         duration: int,
         entries: set[int]
     ):
+
         self.bot = bot
         self.message = message
+
         self.giveaway_name = giveaway_name
+        self.reward_name = reward_name
+        self.reward_type = reward_type
+
         self.reward = reward
+        self.redeemable_links = redeemable_links
+
         self.winners = winners
         self.duration = duration
         self.entries = entries
@@ -34,7 +47,6 @@ class GiveawayManager:
         self.closed = False
 
     async def start(self):
-        """Wait for the giveaway duration, then end it."""
 
         await asyncio.sleep(
             self.duration
@@ -43,14 +55,12 @@ class GiveawayManager:
         await self.end()
 
     async def end(self):
-        """Close the giveaway and process the winners."""
 
         if self.closed:
             return
 
         self.closed = True
 
-        # Select winners.
         winner_ids = select_winners(
             entries=self.entries,
             winner_count=self.winners
@@ -58,21 +68,23 @@ class GiveawayManager:
 
         winners = []
 
-        # Get the guild the giveaway was created in.
         guild = self.message.guild
 
         if guild is None:
             return
 
-        # Process each winner.
-        for user_id in winner_ids:
+        for index, user_id in enumerate(
+            winner_ids
+        ):
 
-            # Get the member from the server.
-            member = guild.get_member(user_id)
+            member = guild.get_member(
+                user_id
+            )
 
             if member is None:
 
                 try:
+
                     member = await guild.fetch_member(
                         user_id
                     )
@@ -85,32 +97,49 @@ class GiveawayManager:
 
             winners.append(member)
 
-            # Give the role prize.
-            await give_role_prize(
-                member=member,
-                role=self.reward
-            )
+            # Role reward.
+            if self.reward_type == "role":
 
-            # Send winner DM.
-            await send_winner_dm(
-                user=member,
-                giveaway_name=self.giveaway_name,
-                reward=self.reward
-            )
+                if self.reward is not None:
 
-        # Get the current giveaway embed.
+                    await give_role_prize(
+                        member=member,
+                        role=self.reward
+                    )
+
+                    await send_winner_dm(
+                        user=member,
+                        giveaway_name=self.giveaway_name,
+                        reward_name=self.reward_name
+                    )
+
+            # Redeemable reward.
+            elif self.reward_type == "redeemable":
+
+                if index < len(
+                    self.redeemable_links
+                ):
+
+                    link = self.redeemable_links[
+                        index
+                    ]
+
+                    await send_redeemable_dm(
+                        user=member,
+                        giveaway_name=self.giveaway_name,
+                        reward_name=self.reward_name,
+                        link=link
+                    )
+
         embed = self.message.embeds[0]
 
-        # Update the giveaway embed.
         embed = close_giveaway_embed(
             embed=embed,
             winners=winners
         )
 
-        # Create the disabled "Closed" button.
         view = create_closed_view()
 
-        # Update the giveaway message.
         await self.message.edit(
             embed=embed,
             view=view
